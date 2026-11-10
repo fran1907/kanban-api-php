@@ -1,0 +1,46 @@
+-- Esquema de base de datos para el gestor Kanban
+CREATE DATABASE IF NOT EXISTS kanban
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE kanban;
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(150) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS boards (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  title VARCHAR(150) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS columns_board (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  board_id INT UNSIGNED NOT NULL,
+  title VARCHAR(100) NOT NULL,
+  position INT NOT NULL DEFAULT 0,
+  FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  column_id INT UNSIGNED NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  description TEXT NULL,
+  priority ENUM('baja','media','alta') NOT NULL DEFAULT 'media',
+  due_date DATE NULL,
+  position INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (column_id) REFERENCES columns_board(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_boards_user ON boards(user_id);
+CREATE INDEX idx_columns_board ON columns_board(board_id, position);
+CREATE INDEX idx_tasks_column ON tasks(column_id, position);
