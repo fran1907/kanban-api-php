@@ -1,96 +1,108 @@
 # Kanban API (PHP)
 
-API REST para un gestor de tareas estilo Kanban, escrita en **PHP 8 puro con PDO** y **MySQL**. Incluye registro y login con **JWT**, tableros con columnas y tareas, y movimiento de tareas entre columnas.
+API REST para un gestor de tareas estilo Kanban, hecha con **PHP y MySQL** (PDO). Permite registrarse, iniciar sesión, y gestionar tableros, columnas y tareas. Cada usuario solo ve sus propios datos.
 
-Es el backend de un proyecto full-stack; el front (React + TypeScript) irá en un repositorio aparte.
+Es el backend de [kanban-web](https://github.com/fran1907/kanban-web), el frontend en React + TypeScript.
 
 ## Tecnologías
 
-- PHP 8.1+ (sin frameworks, router propio)
-- MySQL / MariaDB con PDO y consultas preparadas
-- Autenticación JWT (HS256) y contraseñas con `password_hash`
-- CORS configurable
+- PHP 8 (sin frameworks)
+- MySQL con PDO y consultas preparadas
+- Contraseñas cifradas con `password_hash`
+- Login con token guardado en la base de datos
 
 ## Estructura
 
 ```
 kanban-api-php/
-├── database/schema.sql        # Estructura de la base de datos
-├── public/index.php           # Punto de entrada y definición de rutas
+├── database/schema.sql     # Tablas de la base de datos
+├── public/index.php        # Entrada de la API: decide qué función atiende cada ruta
 ├── src/
-│   ├── Core.php               # Env y conexión PDO
-│   ├── Http.php               # Router, Request, Response, errores HTTP
-│   ├── Auth.php               # JWT y autenticación Bearer
-│   └── Controllers/           # Auth, Board (tableros/columnas), Task
-├── .env.example
+│   ├── funciones.php       # Conexión a la BD, responder en JSON, comprobar el usuario
+│   ├── auth.php            # Registro y login
+│   ├── tableros.php        # Tableros y columnas
+│   └── tareas.php          # Tareas
+├── config.example.php      # Plantilla de configuración (copiar a config.php)
 └── README.md
 ```
 
+### Cómo funciona
+
+```
+Frontend (React)  ->  public/index.php  ->  función de src/  ->  MySQL
+                                                |
+                                      responde con JSON
+```
+
+1. Todas las peticiones llegan a `public/index.php`, que mira el método (GET, POST...) y la ruta.
+2. Llama a la función correspondiente (por ejemplo `crearTablero()`).
+3. Esa función consulta MySQL con PDO y responde en JSON.
+
+### Base de datos
+
+```
+users ──< boards ──< board_columns ──< tasks
+```
+
+Un usuario tiene muchos tableros, un tablero muchas columnas y una columna muchas tareas. Al borrar un tablero se borran también sus columnas y tareas (`ON DELETE CASCADE`).
+
+### Seguridad
+
+- Las contraseñas se guardan cifradas, nunca en texto plano.
+- Al iniciar sesión se genera un token aleatorio que se guarda en la tabla `users`. El frontend lo envía en cada petición (`Authorization: Bearer <token>`) y la API busca a qué usuario pertenece.
+- Todas las consultas usan parámetros (`?`), lo que evita la inyección SQL.
+- Antes de tocar un tablero, columna o tarea se comprueba que pertenezca al usuario.
+
 ## Puesta en marcha
 
-1. Crea la base de datos:
+1. Arranca MySQL (por ejemplo con XAMPP) e importa `database/schema.sql` (en phpMyAdmin: pestaña *Importar*).
+2. Copia la configuración y ajusta los datos si hace falta:
    ```bash
-   mysql -u root -p < database/schema.sql
+   copy config.example.php config.php
    ```
-2. Copia la configuración y edítala con tus datos:
-   ```bash
-   cp .env.example .env
-   ```
-   Cambia `JWT_SECRET` por una clave larga y aleatoria.
-3. Arranca el servidor de desarrollo de PHP:
+3. Arranca la API:
    ```bash
    php -S localhost:8000 -t public
    ```
-   La API queda en `http://localhost:8000/api`.
+   Queda en `http://localhost:8000/api`.
+
+## Cómo arrancarlo cada día
+
+1. XAMPP: *Start* en MySQL.
+2. En la carpeta del proyecto: `php -S localhost:8000 -t public` (deja la terminal abierta).
+3. Arrancar el frontend ([kanban-web](https://github.com/fran1907/kanban-web)) con `npm run dev`.
 
 ## Endpoints
 
-Todas las rutas, salvo registro y login, requieren la cabecera `Authorization: Bearer <token>`.
+Todas las rutas, salvo registro y login, necesitan la cabecera `Authorization: Bearer <token>`.
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | POST | `/api/auth/register` | Crear usuario (`name`, `email`, `password`) |
-| POST | `/api/auth/login` | Iniciar sesión, devuelve el token |
-| GET | `/api/me` | Datos del usuario autenticado |
+| POST | `/api/auth/login` | Iniciar sesión (devuelve el token) |
 | GET | `/api/boards` | Listar mis tableros |
 | POST | `/api/boards` | Crear tablero (con 3 columnas por defecto) |
-| GET | `/api/boards/{id}` | Tablero con sus columnas y tareas |
+| GET | `/api/boards/{id}` | Ver tablero con sus columnas y tareas |
 | DELETE | `/api/boards/{id}` | Borrar tablero |
 | POST | `/api/boards/{id}/columns` | Añadir columna |
-| PUT | `/api/columns/{id}` | Renombrar columna |
 | DELETE | `/api/columns/{id}` | Borrar columna |
 | POST | `/api/columns/{id}/tasks` | Crear tarea |
 | PUT | `/api/tasks/{id}` | Editar tarea |
-| PATCH | `/api/tasks/{id}/move` | Mover tarea (`column_id`, `position`) |
+| PATCH | `/api/tasks/{id}/move` | Mover tarea a otra columna (`column_id`) |
 | DELETE | `/api/tasks/{id}` | Borrar tarea |
 
-### Ejemplo rápido
+### Ejemplo (PowerShell)
 
-```bash
-# Registro
-curl -X POST http://localhost:8000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Ana","email":"ana@example.com","password":"12345678"}'
-
-# Crear un tablero (sustituye TOKEN)
-curl -X POST http://localhost:8000/api/boards \
-  -H "Authorization: Bearer TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Mi primer tablero"}'
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/register -ContentType "application/json" -Body '{"name":"Ana","email":"ana@example.com","password":"12345678"}'
 ```
-
-## Decisiones de diseño
-
-- **Seguridad:** consultas preparadas contra inyección SQL, contraseñas con hash y comprobación de propiedad en cada recurso (un usuario solo ve y modifica sus tableros).
-- **Posiciones:** las tareas y columnas guardan un campo `position`; al mover una tarea se reordenan las demás dentro de una transacción.
-- **Sin dependencias:** el JWT y el router están escritos a mano para entender cómo funcionan. En un proyecto real se podría usar `firebase/php-jwt` y un microframework como Slim.
 
 ## Próximos pasos
 
-- [ ] Front en React + TypeScript
-- [ ] Reordenar columnas
-- [ ] Tests con PHPUnit
-- [ ] Docker Compose (PHP + MySQL)
+- [ ] Reordenar tareas dentro de una columna
+- [ ] Renombrar columnas
+- [ ] Caducidad del token
+- [ ] Desplegar en un hosting con PHP
 
 ## Licencia
 
